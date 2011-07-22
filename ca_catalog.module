@@ -2,10 +2,73 @@
 
 include_once('ca_catalog.features.inc');
 
+function ca_catalog_get_parent_categories($node) {
+  $nodes = array();
+  if ($node->field_ca_catalog_parent_category[0]['nid']) {
+    $new_node = node_load($node->field_ca_catalog_parent_category[0]['nid']);
+    $nodes[$new_node->nid] = $new_node;
+    $nodes += ca_catalog_get_parent_categories($new_node);
+  }
+  return $nodes;
+}
+
+/*
+ * Implementation of hook_ctools_render_alter($info, $page, $args, $contexts, $task, $subtask).
+ *
+ * Overriding the breadcrumbs for the taxonomy term pages.
+ */
+function ca_catalog_ctools_render_alter($info, $page, $args, $contexts, $task, $subtask){
+  $node = $contexts['argument_nid_1']->data;
+  if ($task['name'] == 'node_view' && ($node->type == 'ca_catalog_product_category' || $node->type == 'ca_catalog_product_sub_category')) {
+    drupal_add_css(drupal_get_path('module', 'ca_catalog') . "/ca_catalog.css", 'module', 'all', FALSE);
+    $bc = array();
+    $bc[] = l(t('Home'), '<front>');
+    $nodes = array();
+    $nodes[$node->nid] = $node;
+    $nodes += ca_catalog_get_parent_categories($node);
+    $nodes = array_reverse($nodes);
+    foreach ($nodes as $node_item) {
+      if ($node_item->nid == $node->nid) {
+        $bc[] = t($node->title);
+      }
+      else {
+        $bc[] = l($node_item->title, 'node/'. $node_item->nid);
+      }
+    }
+    drupal_set_breadcrumb($bc);
+  }
+  
+  if($subtask['subtask']->name == 'ca_catalog') {
+    drupal_add_css(drupal_get_path('module', 'ca_catalog') . "/ca_catalog.css", 'module', 'all', FALSE);
+  }
+}
+
+function ca_catalog_nodeapi(&$node, $op, $a3, $a4) {
+  if ($node->type == 'product') {
+    if ($op == 'view') {
+      $bc = array();
+      $bc[] = l(t('Home'), '<front>');
+      $nodes = array();
+      $nodes[$node->nid] = $node;
+      $nodes += ca_catalog_get_parent_categories($node);
+      $nodes = array_reverse($nodes);
+      foreach ($nodes as $node_item) {
+        if ($node_item->nid == $node->nid) {
+          $bc[] = t($node->title);
+        }
+        else {
+          $bc[] = l($node_item->title, 'node/'. $node_item->nid);
+        }
+      }
+      drupal_set_breadcrumb($bc);
+    }
+  }
+}
+
 function ca_catalog_form_alter(&$form, &$form_state, $form_id) {
-  switch($form_id) {
-    case 'context_admin_term_options_menu_taxonomy_form_term':
-      taxonomy_image_form_alter($form, $form_state, 'taxonomy_form_term');
+  switch ($form_id) {
+    case 'ca_catalog_product_category_node_form':
+      $form['field_ca_catalog_parent_category']['#access'] = FALSE;
       break;
   }
 }
